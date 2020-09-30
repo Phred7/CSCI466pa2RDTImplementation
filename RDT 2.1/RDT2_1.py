@@ -63,6 +63,32 @@ class RDT:
 	
 	def disconnect(self):
 		self.network.disconnect()
+
+	def mkPkt(self, seqNum, data, checkSum):
+                p = Packet(self.seq_num, data, checkSum)
+                self.seq_num = 1 if self.seq_num == 0 else 0
+                return p
+
+        def corrupt(self, pkt):
+                return False
+
+        def isACK(self, pkt):
+                pass
+
+        def isNAK(self, pkt):
+                pass
+
+        def deliver_data(self, data):
+                pass
+
+        def extract(self, pkt):
+                pass
+
+        def getSeqNum(self, pkt):
+                pass
+
+        def udt_send(self, pkt):
+                self.network.udt_send(pkt.get_byte_S())
 	
 	def rdt_1_0_send(self, msg_S):
 		p = Packet(self.seq_num, msg_S)
@@ -90,9 +116,60 @@ class RDT:
 		# if this was the last packet, will return on the next iteration
 	
 	def rdt_2_1_send(self, msg_S):
+                #if rdt send called
+                        #make pkt 0
+                        #send pkt 0
+
+                #wait for ACK/NAK 0
+                        #if rcv pkt and (pkt corrupt || isNAK)
+                        #resend pkt 0
+
+                        #if rcv pkt and pkt !corrupt and pkt is ACK
+                        #move on
+
+                #if rdt send called
+                        #make pkt 1
+                        #send pkt 1
+
+                #wait for ACK/NAK 1
+                        #if rcv pkt and (pkt corrupt || isNAK)
+                        #resend pkt 1
+
+                        #if rcv pkt and pkt !corrupt and pkt is ACK
+                        #move on                    
 		pass
 	
 	def rdt_2_1_receive(self):
+                #wait for pkt 0
+                        #if pkt !corrupt and seq_num == 0
+                        #extract data
+                        #deliver data
+                        #make pkt with checkSum
+                        #send pkt
+
+                        #if pkt corrupt
+                        #make a NAK pkt with checkSum
+                        #send pkt
+
+                        #if pkt !corrupt and seq_num == 1 (loop on duplicates)
+                        #make a NAK pkt with checkSum
+                        #send pkt
+
+                #wait for pkt 1
+                        #if pkt !corrupt and seq_num == 1
+                        #extract data
+                        #deliver data
+                        #make pkt with checkSum
+                        #send pkt
+
+                        #if pkt corrupt
+                        #make a NAK pkt with checkSum
+                        #send pkt
+
+                        #if pkt !corrupt and seq_num == 0 (loop on duplicates)
+                        #make a NAK pkt with checkSum
+                        #send pkt
+                        
 		pass
 	
 	def rdt_3_0_send(self, msg_S):
