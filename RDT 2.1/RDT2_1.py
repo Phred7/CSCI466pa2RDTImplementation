@@ -74,7 +74,7 @@ class RDT:
         
         def disconnect(self):
                 self.net_snd.disconnect()
-		self.net_rcv.disconnect()
+                self.net_rcv.disconnect()
 
         def mkPkt(self, seqNum, data):
                 pkt = Packet(self.seq_num, data)
@@ -106,9 +106,9 @@ class RDT:
         
         def rdt_1_0_send(self, msg_S):
                 p = Packet(self.seq_num, msg_S)
-		self.seq_num += 1
-		# !!! make sure to use net_snd link to udt_send and udt_receive in the RDT send function
-		self.net_snd.udt_send(p.get_byte_S())         
+                self.seq_num += 1
+                # !!! make sure to use net_snd link to udt_send and udt_receive in the RDT send function
+                self.net_snd.udt_send(p.get_byte_S())         
                 print(p)
         
         def rdt_1_0_receive(self):
@@ -250,3 +250,4 @@ if __name__ == '__main__':
                 print(rdt.rdt_2_1_receive())
                 rdt.rdt_1_0_send('MSG_FROM_SERVER')
                 rdt.disconnect()
+
