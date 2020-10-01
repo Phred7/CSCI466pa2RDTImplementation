@@ -116,11 +116,11 @@ if __name__ == '__main__':
 	if args.role == 'client':
 		network.udt_send('MSG_FROM_CLIENT')
 		sleep(2)
-		print(network.udt_receive())
+		#print(network.udt_receive())
 		network.disconnect()
 	
 	else:
 		sleep(1)
-		print(network.udt_receive())
+		#print(network.udt_receive())
 		network.udt_send('MSG_FROM_SERVER')
 		network.disconnect()

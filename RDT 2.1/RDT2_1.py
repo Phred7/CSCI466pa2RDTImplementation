@@ -72,27 +72,28 @@ class RDT:
                 self.seq_num = 1 if self.seq_num == 0 else 0
                 return pkt
 
-        def corrupt(self, pkt):
+        def corrupt(self, pkt): #if returns True pkt is corrupt
                 return Packet.corrupt(pkt.get_byte_S())
 
         def isACK(self, pkt):
-                pass
+                return False
 
         def isNAK(self, pkt):
+                return False
+
+        def deliverData(self):
                 pass
 
-        def deliver_data(self, data):
-                #this method passes the received data to the client or server (only once per packet)
-                pass
-
-        def extract(self, pkt):
+        def getByteString(self, pkt):
                 pass
 
         def getSeqNum(self, pkt):
                 pass
 
-        def udt_send(self, pkt):
+        def udtSend(self, pkt):
                 self.network.udt_send(pkt.get_byte_S())
+
+                
         
         def rdt_1_0_send(self, msg_S):
                 p = Packet(self.seq_num, msg_S)
@@ -101,6 +102,8 @@ class RDT:
                 self.network.udt_send(p.get_byte_S())
         
         def rdt_1_0_receive(self):
+                #print("1.0\n")
+                #this method passes the received data to the client or server (only once per packet)
                 ret_S = None
                 byte_S = self.network.udt_receive()
                 self.byte_buffer += byte_S
@@ -145,26 +148,57 @@ class RDT:
                 pass
         
         def rdt_2_1_receive(self):
+                #print("2.1\n")
+                
+                #msg_S for ACK/NAK
+                #ACK:seq_num
+                #NAK:seq_num
+
+                #this method passes the received data to the client or server (only once per packet)
+                ret_S = None
+                byte_S = self.network.udt_receive()
+                self.byte_buffer += byte_S
+                # keep extracting packets - if reordered, could get more than one
+                while True:
+                        # check if we have received enough bytes
+                        if (len(self.byte_buffer) < Packet.length_S_length):
+                                return ret_S  # not enough bytes to read packet length
+                        # extract length of packet
+                        length = int(self.byte_buffer[:Packet.length_S_length])
+                        if len(self.byte_buffer) < length:
+                                return ret_S  # not enough bytes to read the whole packet
+                        # create packet from buffer content and add to return string
+                        p = Packet.from_byte_S(self.byte_buffer[0:length])
+                        ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
+                        # remove the packet bytes from the buffer
+                        self.byte_buffer = self.byte_buffer[length:]
+                # if this was the last packet, will return on the next iteration
+
+                        pACK = self.mkPkt(p.seq_num, (str("ACK:" + str(p.seq_num))))
+                        self.udtSend(pACK)
+
+                
+                
                 #wait for pkt 0
                         #if pkt !corrupt and seq_num == 0
                         #extract data
                         #deliver data
-                        #make pkt with checkSum
+                        #make ACK pkt with checkSum
                         #send pkt
 
                         #if pkt corrupt
-                        #make a NAK pkt with checkSum
+                        #make NAK pkt with checkSum
                         #send pkt
 
                         #if pkt !corrupt and seq_num == 1 (loop on duplicates)
-                        #make a NAK pkt with checkSum
+                        #make ACK pkt with checkSum
                         #send pkt
 
                 #wait for pkt 1
                         #if pkt !corrupt and seq_num == 1
                         #extract data
                         #deliver data
-                        #make pkt with checkSum
+                        #make ACK pkt with checkSum
                         #send pkt
 
                         #if pkt corrupt
@@ -172,7 +206,7 @@ class RDT:
                         #send pkt
 
                         #if pkt !corrupt and seq_num == 0 (loop on duplicates)
-                        #make a NAK pkt with checkSum
+                        #make ACK pkt with checkSum
                         #send pkt
                         
                 pass
@@ -195,12 +229,14 @@ if __name__ == '__main__':
         if args.role == 'client':
                 rdt.rdt_1_0_send('MSG_FROM_CLIENT')
                 sleep(2)
-                print(rdt.rdt_1_0_receive())
+                #print(rdt.rdt_1_0_receive())
+                print(rdt.rdt_2_1_receive())
                 rdt.disconnect()
         
         
         else:
                 sleep(1)
-                print(rdt.rdt_1_0_receive())
+                #print(rdt.rdt_1_0_receive())
+                print(rdt.rdt_2_1_receive())
                 rdt.rdt_1_0_send('MSG_FROM_SERVER')
                 rdt.disconnect()
