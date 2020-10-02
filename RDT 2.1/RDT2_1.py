@@ -1,6 +1,7 @@
 import Network
 import argparse
-from time import sleep
+import threading
+from time import sleep, time
 import hashlib
 
 
@@ -35,6 +36,15 @@ class Packet:
                 checksum_S = checksum.hexdigest()
                 # compile into a string
                 return length_S + seq_num_S + checksum_S + self.msg_S
+
+        def getSeqNum(self):
+                return self.seq_num
+
+        def getMsgS(self):
+                return self.msg_S
+
+        def __str__(self):
+                return ("PACKET: " + str(self.seq_num))
         
         @staticmethod
         def corrupt(byte_S):
@@ -51,8 +61,21 @@ class Packet:
                 # and check if the same
                 return checksum_S != computed_checksum_S
 
-        def __str__(self):
-                return ("\nPACKET: " + str(self.seq_num) + "\n")
+        @staticmethod
+        def isACK(pkt):
+                msg_S = pkt.getMsgS()
+                if "ACK:" in msg_S:
+                        print("ACK: " + str(msg_S))
+                        return True
+                return False
+
+        @staticmethod
+        def isNAK(pkt):
+                msg_S = pkt.getMsgS()
+                if "NAK:" in msg_S:
+                        print("NAK: " + str(msg_S))
+                        return True
+                return False
 
 
 class RDT:
@@ -60,6 +83,11 @@ class RDT:
         seq_num = 1
         ## buffer of bytes read from network
         byte_buffer = ''
+        rcvThread = None
+        stop = None
+        threadTimeout = 0.1
+        interval = 0.001
+        
         
         def __init__(self, role_S, server_S, port):
                 # use the passed in port and port+1 to set up unidirectional links between
@@ -71,8 +99,52 @@ class RDT:
                 else:
                         self.net_rcv = Network.NetworkLayer(role_S, server_S, port)
                         self.net_snd = Network.NetworkLayer(role_S, server_S, port+1)
+
+                self.rcvThread = threading.Thread(name='RCV Helper', target=self.recieveHelper)
+                self.stop = False
+                self.rcvThread.start()
+
+        def recieveHelper(self):
+                seq_num = 1
+                elapsedTime = 0
+                startTime = time()
+                treadTimeoutMod = 20
+
+                #continually runs as rcvThread
+                while(True):
+                        if(self.threadTimeout*treadTimeoutMod < elapsedTime):
+                                print("receive thread disconnecting")
+                                return
+
+                        #feeds buffer
+                        byte_S = self.udtRcv()
+                        self.byte_buffer += byte_S
+                        
+                        if(str(byte_S) == ""):
+                                elapsedTime = time() - startTime
+                        else:
+                                elapsedTime = 0
+
+                        #executes RDT 2.1 recieve FSM
+
+                        sleep(self.interval)                               
+
+                #pass
         
         def disconnect(self):
+                print("disconnecting")
+                p = Packet(12345, "ACK:12345")
+                print(Packet.isACK(p))
+                print(Packet.isNAK(p))
+                print("\n")
+                p = Packet(12345, "NAK:12345")
+                print(Packet.isACK(p))
+                print(Packet.isNAK(p))
+                print("\n")
+                if self.rcvThread:
+                        self.stop = True
+                        self.rcvThread.join()
+                        
                 self.net_snd.disconnect()
                 self.net_rcv.disconnect()
 
@@ -85,10 +157,10 @@ class RDT:
                 return Packet.corrupt(pkt.get_byte_S())
 
         def isACK(self, pkt):
-                return False
+                return Packet.isACK(pkt.getMsgS())
 
         def isNAK(self, pkt):
-                return False
+                return Packet.isNAK(pkt.getMsgS())
 
         def deliverData(self):
                 pass
@@ -100,40 +172,19 @@ class RDT:
                 pass
 
         def udtSend(self, pkt):
-                self.net_snd.udt_send(p.get_byte_S())
+                self.net_snd.udt_send(pkt.get_byte_S())
 
-                
-        
-        def rdt_1_0_send(self, msg_S):
+        def udtRcv(self):
+                return self.net_rcv.udt_receive()
+
+
+
+        def rdt_2_1_send(self, msg_S):
                 p = Packet(self.seq_num, msg_S)
                 self.seq_num += 1
                 # !!! make sure to use net_snd link to udt_send and udt_receive in the RDT send function
+                print("sending:^" + str(p) + "\n")
                 self.net_snd.udt_send(p.get_byte_S())         
-                print(p)
-        
-        def rdt_1_0_receive(self):
-                #print("1.0\n")
-                #this method passes the received data to the client or server (only once per packet)
-                ret_S = None
-                byte_S = self.net_rcv.udt_receive()
-                self.byte_buffer += byte_S
-                # keep extracting packets - if reordered, could get more than one
-                while True:
-                        # check if we have received enough bytes
-                        if (len(self.byte_buffer) < Packet.length_S_length):
-                                return ret_S  # not enough bytes to read packet length
-                        # extract length of packet
-                        length = int(self.byte_buffer[:Packet.length_S_length])
-                        if len(self.byte_buffer) < length:
-                                return ret_S  # not enough bytes to read the whole packet
-                        # create packet from buffer content and add to return string
-                        p = Packet.from_byte_S(self.byte_buffer[0:length])
-                        ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
-                        # remove the packet bytes from the buffer
-                        self.byte_buffer = self.byte_buffer[length:]
-                # if this was the last packet, will return on the next iteration
-        
-        def rdt_2_1_send(self, msg_S):
                 #if rdt send called
                         #make pkt 0
                         #send pkt 0
@@ -158,34 +209,35 @@ class RDT:
                 pass
         
         def rdt_2_1_receive(self):
-                #print("2.1\n")
                 
                 #msg_S for ACK/NAK
                 #ACK:seq_num
                 #NAK:seq_num
-
-                #this method passes the received data to the client or server (only once per packet)
+                p = None
                 ret_S = None
-                byte_S = self.network.udt_receive()
-                self.byte_buffer += byte_S
-                # keep extracting packets - if reordered, could get more than one
+                
                 while True:
-                        # check if we have received enough bytes
+
                         if (len(self.byte_buffer) < Packet.length_S_length):
-                                return ret_S  # not enough bytes to read packet length
-                        # extract length of packet
+                                return ret_S  
+
                         length = int(self.byte_buffer[:Packet.length_S_length])
                         if len(self.byte_buffer) < length:
-                                return ret_S  # not enough bytes to read the whole packet
-                        # create packet from buffer content and add to return string
+                                return ret_S
+
                         p = Packet.from_byte_S(self.byte_buffer[0:length])
                         ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
-                        # remove the packet bytes from the buffer
-                        self.byte_buffer = self.byte_buffer[length:]
-                # if this was the last packet, will return on the next iteration
 
-                        pACK = self.mkPkt(p.seq_num, (str("ACK:" + str(p.seq_num))))
-                        self.udtSend(pACK)
+                        self.byte_buffer = self.byte_buffer[length:]
+
+                        if(Packet.isACK(p)):
+                                ret_S = None
+                                
+                        print("\n\nrecieved: " + str(p))
+
+
+                #pACK = self.mkPkt(p.seq_num, (str("ACK:" + str(p.seq_num))))
+                #self.udtSend(pACK)
 
                 
                 
@@ -218,14 +270,43 @@ class RDT:
                         #if pkt !corrupt and seq_num == 0 (loop on duplicates)
                         #make ACK pkt with checkSum
                         #send pkt
-                        
-                pass
         
         def rdt_3_0_send(self, msg_S):
                 pass
         
         def rdt_3_0_receive(self):
                 pass
+
+        def rdt_1_0_send(self, msg_S):
+                p = Packet(self.seq_num, msg_S)
+                self.seq_num += 1
+                # !!! make sure to use net_snd link to udt_send and udt_receive in the RDT send function
+                self.net_snd.udt_send(p.get_byte_S())         
+                print("1.0 send" + str(p))
+        
+        def rdt_1_0_receive(self):
+                #print("1.0\n")
+                #this method passes the received data to the client or server (only once per packet)
+                ret_S = None
+                byte_S = self.net_rcv.udt_receive()
+                self.byte_buffer += byte_S
+                # keep extracting packets - if reordered, could get more than one
+                while True:
+                        # check if we have received enough bytes
+                        if (len(self.byte_buffer) < Packet.length_S_length):
+                                return ret_S  # not enough bytes to read packet length
+                        # extract length of packet
+                        length = int(self.byte_buffer[:Packet.length_S_length])
+                        if len(self.byte_buffer) < length:
+                                return ret_S  # not enough bytes to read the whole packet
+                        # create packet from buffer content and add to return string
+                        p = Packet.from_byte_S(self.byte_buffer[0:length])
+                        ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
+                        # remove the packet bytes from the buffer
+                        self.byte_buffer = self.byte_buffer[length:]
+
+                # if this was the last packet, will return on the next iteration
+        
 
 
 if __name__ == '__main__':
@@ -240,14 +321,14 @@ if __name__ == '__main__':
                 rdt.rdt_1_0_send('MSG_FROM_CLIENT')
                 sleep(2)
                 #print(rdt.rdt_1_0_receive())
-                print(rdt.rdt_2_1_receive())
+                print("rdt main:" + str(rdt.rdt_2_1_receive()))
                 rdt.disconnect()
         
         
         else:
                 sleep(1)
                 #print(rdt.rdt_1_0_receive())
-                print(rdt.rdt_2_1_receive())
-                rdt.rdt_1_0_send('MSG_FROM_SERVER')
+                print("rdt main:" + str(rdt.rdt_2_1_receive()))
+                rdt.rdt_2_1_send('MSG_FROM_SERVER')
                 rdt.disconnect()
 
