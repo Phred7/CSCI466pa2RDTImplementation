@@ -20,7 +20,7 @@ if __name__ == '__main__':
         
         rdt = RDT.RDT('client', args.server, args.port)
         for msg_S in msg_L:
-                print('Converting: ' + msg_S)
+#                print('Converting: ' + msg_S)
                 #rdt.rdt_1_0_send(msg_S)
                 rdt.rdt_2_1_send(msg_S)
                 
@@ -39,7 +39,7 @@ if __name__ == '__main__':
                 # print the result
                 if msg_S:
                         pass
-                        print('to: ' + msg_S + '\n')
+#                        print('to: ' + msg_S + '\n')
         
         rdt.disconnect()
 
