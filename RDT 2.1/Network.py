@@ -4,13 +4,12 @@ import threading
 from time import sleep
 import random
 import RDT2_1 as RDT
-import os
 
 ## Provides an abstraction for the network layer
 class NetworkLayer:
         # configuration parameters
         prob_pkt_loss = 0
-        prob_byte_corr = 0.0
+        prob_byte_corr = 0.95
         prob_pkt_reorder = 0
         
         # class variables
@@ -95,8 +94,10 @@ class NetworkLayer:
                         except socket.timeout as err:
                                 pass
                         except ConnectionResetError as err:
-                                print("\n\n\nClient Disconnected\n\n\n")
-                                os._exit(1)
+                                pass
+                        except ConnectionAbortedError as err:
+                                print("Client disconnected: assume recieved pkt")
+                                return
                         if self.stop:
                                 #                 print (threading.currentThread().getName() + ': Ending')
                                 return
