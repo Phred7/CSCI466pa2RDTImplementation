@@ -8,8 +8,8 @@ import RDT3_0 as RDT
 ## Provides an abstraction for the network layer
 class NetworkLayer:
         # configuration parameters
-        prob_pkt_loss = 0
-        prob_byte_corr = 0
+        prob_pkt_loss = .1
+        prob_byte_corr = .1
         prob_pkt_reorder = 0
         
         # class variables
@@ -19,7 +19,7 @@ class NetworkLayer:
         lock = threading.Lock()
         collect_thread = None
         stop = None
-        socket_timeout = 0.1
+        socket_timeout = 5#0.1
         reorder_msg_S = None
         
         def __init__(self, role_S, server_S, port):

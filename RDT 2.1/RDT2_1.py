@@ -45,6 +45,9 @@ class Packet:
 
         def __str__(self):
                 return ("PACKET: " + str(self.seq_num))
+
+##        def __eq__(self, other):
+##                return self.msg_S == other.msg_S
         
         @staticmethod
         def corrupt(byte_S):
@@ -139,7 +142,7 @@ class RDT:
                 nak = Packet(seqNum, ("NAK:" + str(seqNum)))
                 self.udtSend(nak)
                 if(self.debugging == True):
-                        print("sendNAK success")
+                        print("sendNAK success:" + nak.getMsgS())
 
 
 
