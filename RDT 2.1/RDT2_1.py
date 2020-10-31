@@ -87,7 +87,7 @@ class RDT:
         ## buffer of bytes read from network
         byte_buffer = ''
         requestNum = 0
-        debugging = False
+        debugging = True
         
         
         def __init__(self, role_S, server_S, port):

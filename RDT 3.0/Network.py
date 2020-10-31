@@ -19,7 +19,7 @@ class NetworkLayer:
         lock = threading.Lock()
         collect_thread = None
         stop = None
-        socket_timeout = 5#0.1
+        socket_timeout = 9#0.1
         reorder_msg_S = None
         
         def __init__(self, role_S, server_S, port):
@@ -54,6 +54,8 @@ class NetworkLayer:
         def udt_send(self, msg_S):
                 # return without sending if the packet is being dropped
                 if random.random() < self.prob_pkt_loss:
+                        if(RDT.RDT.getDebugging() == True):
+                                print("x.xxx_Loss Event for >" + str(msg_S[0:15]) + "<...")
                         return
                 # corrupt a packet
                 if random.random() < self.prob_byte_corr:
