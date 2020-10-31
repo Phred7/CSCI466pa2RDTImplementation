@@ -115,9 +115,9 @@ class RDT:
                         self.net_snd = Network.NetworkLayer(role_S, server_S, port+1)
                         self.isServer = False
                         
-
+                self.sndQueue = []
                 self.rcvThread = threading.Thread(name='RCV Helper', target=self.rcvHelper)
-                self.sndThread = threading.Thread(name='SND Queue', target=self.sndQueue)
+                self.sndThread = threading.Thread(name='SND Queue', target=self.sndQueueHelper)
                 self.timerThread = threading.Thread(name='Timer', target=self.timer)
                 self.stop = False
                 self.rcvThread.start()
@@ -131,6 +131,9 @@ class RDT:
         def disconnect(self):
                 self.stop = True
                 self.rcvThread.join()
+                self.sndThread.join()
+                self.timerThread.join()
+                
 ##                if(self.isServer == False):
 ##                        for x in range(0, 3):
 ##                                self.sendACK(-1)
@@ -141,28 +144,41 @@ class RDT:
                 pkt = Packet(seqNum, data)
                 return pkt
 
-        def sendACK(self, seqNum):
-                ack = Packet(seqNum, ("ACK:" + str(seqNum)))
-                self.net_snd.udt_send(ack.get_byte_S())
+##        def sendACK(self, seqNum):
+##                ack = Packet(seqNum, ("ACK:" + str(seqNum)))
+##                self.net_snd.udt_send(ack.get_byte_S())
+##                if(self.debugging == True):
+##                        print(str(self.elapsed) + "_ACK Sent:" + ack.getMsgS())
+##                return True
+##
+##        def sendNAK(self, seqNum):
+##                nak = Packet(seqNum, ("NAK:" + str(seqNum)))
+##                self.net_snd.udt_send(nak.get_byte_S())
+##                if(self.debugging == True):
+##                        print(str(self.elapsed) + "_NAK Sent:" + nak.getMsgS())
+
+
+
+        def sndQueueHelper(self):
                 if(self.debugging == True):
-                        print(str(self.elapsed) + "_ACK Sent:" + ack.getMsgS())
-                return True
-
-        def sendNAK(self, seqNum):
-                nak = Packet(seqNum, ("NAK:" + str(seqNum)))
-                self.net_snd.udt_send(nak.get_byte_S())
-                if(self.debugging == True):
-                        print(str(self.elapsed) + "_NAK Sent:" + nak.getMsgS())
-
-
-
-        def sndQueue(self):
-                if(self.debugging == True):
-                        print(str(time()) + "_snd thread starting\n\n")
+                        print(str(time()) + "_snd thread starting")
                 while(self.stop != True):
+                        if(self.sndQueue):
+                                pkt = self.sndQueue.pop(0)
+                                self.net_snd.udt_send(pkt.get_byte_S())
+                                if(self.debugging == True):
+                                        print(str(self.elapsed) + "_pkt sent: " + str(pkt.msg_S[0:self.debugLen]))
+                        sleep(0.0001)
+
+        def addQueue(self, pkt):
+                self.sndQueue.append(pkt)
+                if(self.debugging == True):
+                        print(str(self.elapsed) + "_pkt queued: " + str(pkt.msg_S[0:self.debugLen]))
 
 
         def timer(self):
+                startTime = time()
+                self.elapsed = 0
                 if(self.debugging == True):
                         print(str(time()) + "_timer thread starting\n\n")
                 while(self.stop != True):
@@ -170,10 +186,8 @@ class RDT:
                         sleep(0.0005)
 
         def rcvHelper(self):
-                startTime = time()
-                self.elapsed = 0
                 if(self.debugging == True):
-                        print(str(time()) + "_rcv thread starting\n\n")
+                        print(str(time()) + "_rcv thread starting")
                 while(self.stop != True):
                         #self.elapsed = round((time() - startTime), 3)
                         byte_S = self.net_rcv.udt_receive()
@@ -198,7 +212,7 @@ class RDT:
                                         if(self.debugging == True):
                                                 print(str(self.elapsed) + "_recieved corrupt pkt>" + str(self.byte_buffer[0:(self.debugLen*2)]) + "<...")
                                         nak = Packet(self.seq_num, ("NAK:" + str(self.seq_num)))
-                                        self.net_snd.udt_send(nak.get_byte_S())
+                                        self.addQueue(nak)
                                         if(self.debugging == True):
                                                 print(str(self.elapsed) + "_NAK Sent:" + nak.getMsgS())
                                         self.byte_buffer = self.byte_buffer[length:]
@@ -210,17 +224,20 @@ class RDT:
                         if(self.seq_num == p.seq_num):
                                 if(Packet.isACK(p) or Packet.isNAK(p)):
                                         self.pACK = p
+                                        if(self.debugging == True):
+                                                print(str(self.elapsed) + "_recieved: " + str(p.msg_S))
                                         continue
                                 
                                 if(self.debugging == True):
                                         print(str(self.elapsed) + "_recieved data: " + str(p.seq_num) + ">" + str(p.msg_S[0:self.debugLen]) + "<...")
                                 ack = Packet(p.seq_num, ("ACK:" + str(p.seq_num)))
-                                self.net_snd.udt_send(ack.get_byte_S())
+                                self.addQueue(ack)
                                 if(self.debugging == True):
                                         print(str(self.elapsed) + "_ACK Sent:" + ack.getMsgS())
+                                self.seq_num = 1 if self.seq_num == 0 else 0
                                 self.p = p
                                 #self.seq_num = self.seq_num + 1
-                                self.seq_num = 1 if self.seq_num == 0 else 0
+
                         else:
                                 if(self.lastP != None):    
                                         if(p.equal(self.lastP)):
@@ -228,7 +245,7 @@ class RDT:
                                                 if(self.debugging == True):
                                                         print(str(self.elapsed) + "_recieved duplicate data pkt: " + str(p.seq_num) + ">" + str(p.msg_S[0:self.debugLen]) + "<...")
                                                         print(str(self.elapsed) + "_ACK resent:" + ack.getMsgS())
-                                                self.net_snd.udt_send(ack.get_byte_S())
+                                                self.addQueue(ack)
                                                 continue
                                         
                                 if(self.debugging == True):
@@ -257,7 +274,7 @@ class RDT:
                                         print()
                 while(self.sendSuccess == False):
                         try:
-                                self.net_snd.udt_send(p.get_byte_S())
+                                self.addQueue(p)
                         except ConnectionAbortedError as err:
                                 print("Connection aborted")
                                 self.disconnect()
